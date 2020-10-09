@@ -76,7 +76,7 @@ type ExpectedCOCondition struct {
 	status        corev1.ConditionStatus
 }
 
-func TestCredentialsRequestReconcile(t *testing.T) {
+func TestAWSCredentialsRequestReconcile(t *testing.T) {
 	schemeutils.SetupScheme(scheme.Scheme)
 
 	// Utility function to get the test credentials request from the fake client
@@ -1249,6 +1249,8 @@ func TestCredentialsRequestReconcile(t *testing.T) {
 				assert.Equal(t, testCredRootSecretResourceVersion, cr.Status.LastSyncCloudCredsSecretResourceVersion)
 			},
 		},
+		// TODO: test rotation and update required due to CR spec changes
+		// TODO: test that update sets mint timestamp
 	}
 
 	for _, test := range tests {
@@ -1330,6 +1332,94 @@ func TestCredentialsRequestReconcile(t *testing.T) {
 		})
 	}
 }
+
+/*
+func TestReconcileMintTimestamp(t *testing.T) {
+	schemeutils.SetupScheme(scheme.Scheme)
+
+	getSecret := func(c client.Client) *corev1.Secret {
+		secret := &corev1.Secret{}
+		err := c.Get(context.TODO(), client.ObjectKey{Name: testSecretName, Namespace: testSecretNamespace}, secret)
+		if err == nil {
+			return secret
+		}
+		return nil
+	}
+// TODO: test no mint timestamp, secret has none
+// TODO: test no mint timestamp, secret has one
+// TODO: test mint timpestamp, secret has a different one
+
+	tests := []struct {
+		name     string
+		existing []runtime.Object
+	}{
+		{
+			name: "set last rotation time for old secret",
+			existing: []runtime.Object{
+				testOperatorConfig(""),
+				createTestNamespace(testNamespace),
+				createTestNamespace(testSecretNamespace),
+				func() *minterv1.CredentialsRequest {
+					cr := testCredentialsRequest(t)
+					// Remove the finalizer
+					cr.ObjectMeta.Finalizers = []string{}
+					return cr
+				}(),
+				testAWSCredsSecret("kube-system", "aws-creds", testRootAWSAccessKeyID, testRootAWSSecretAccessKey),
+				testInfrastructure(testInfraName),
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			mockCtrl := gomock.NewController(t)
+			defer mockCtrl.Finish()
+
+			fakeClient := fake.NewFakeClient(test.existing...)
+			rcr := &ReconcileCredentialsRequest{
+				Client: fakeClient,
+				Actuator: &actuator.AWSActuator{
+					Client: fakeClient,
+					Codec:  codec,
+					Scheme: scheme.Scheme,
+					AWSClientBuilder: func(accessKeyID, secretAccessKey []byte, c client.Client) (minteraws.Client, error) {
+						if string(accessKeyID) == testRootAWSAccessKeyID {
+							return mockRootAWSClient, nil
+						} else if string(accessKeyID) == testAWSAccessKeyID {
+							return mockSecretAWSClient, nil
+						} else {
+							return mockReadAWSClient, nil
+						}
+					},
+				},
+				platformType: configv1.AWSPlatformType,
+			}
+			// make sure we clear this test case's handler
+			defer clusteroperator.ClearHandlers()
+			clusteroperator.AddStatusHandler(rcr)
+
+			_, err = rcr.Reconcile(reconcile.Request{
+				NamespacedName: types.NamespacedName{
+					Name:      testCRName,
+					Namespace: testNamespace,
+				},
+			})
+
+			if test.validate != nil {
+				test.validate(fakeClient, t)
+			}
+
+			if err != nil && !test.expectErr {
+				require.NoError(t, err, "Unexpected error: %v", err)
+			}
+			if err == nil && test.expectErr {
+				t.Errorf("Expected error but got none")
+			}
+
+		})
+	}
+}
+*/
 
 const (
 	testCRGeneration                  = 1 // just non-zero

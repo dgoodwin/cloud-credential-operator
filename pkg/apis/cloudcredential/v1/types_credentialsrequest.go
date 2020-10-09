@@ -64,6 +64,10 @@ type CredentialsRequestStatus struct {
 	// LastSyncTimestamp is the time that the credentials were last synced.
 	LastSyncTimestamp *metav1.Time `json:"lastSyncTimestamp,omitempty"`
 
+	// MintTimestamp is the time the credentials were last minted. It will only be set if using mint mode, and will be updated
+	// whenever credentials expire if using rotation.
+	MintedTimestamp *metav1.Time `json:"mintTimestamp,omitempty"`
+
 	// LastSyncGeneration is the generation of the credentials request resource
 	// that was last synced. Used to determine if the object has changed and
 	// requires a sync.

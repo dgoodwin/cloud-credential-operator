@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"net/url"
 	"reflect"
+	"sort"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 
@@ -113,7 +115,7 @@ func DecodeProviderSpec(codec *minterv1.ProviderCodec, cr *minterv1.CredentialsR
 // Checks if the credentials currently exist.
 //
 // To do this we will check if the target secret exists. This call is only used to determine
-// if we're doing a Create or an Update, but in the context of this acutator it makes no
+// if we're doing a Create or an Update, but in the context of this actuator it makes no
 // difference. As such we will not check if the user exists in AWS and is correctly configured
 // as this will all be handled in both Create and Update.
 func (a *AWSActuator) Exists(ctx context.Context, cr *minterv1.CredentialsRequest) (bool, error) {
@@ -176,6 +178,13 @@ func (a *AWSActuator) needsUpdate(ctx context.Context, cr *minterv1.CredentialsR
 
 	// Minted-user-specific checks
 	if awsStatus.User != "" {
+
+		// Check if we're due for rotation:
+		if utils.CredentialIsDueForRotation(cr) {
+			logger.Info("credential is due for rotation")
+			return true, nil
+		}
+
 		// If AWS user defined (ie minted creds instead of passthrough) check whether user is tagged
 		user, err := readAWSClient.GetUser(&iam.GetUserInput{
 			UserName: aws.String(awsStatus.User),
@@ -211,6 +220,13 @@ func (a *AWSActuator) needsUpdate(ctx context.Context, cr *minterv1.CredentialsR
 		}
 		if !accessKeyExists {
 			// then we need an update
+			return true, nil
+		}
+
+		// Users are limited to two keys in AWS, if there are multiple it implies we're mid-rotation and old creds have
+		// not yet been cleaned up. In this scenario we will reconcile to give the actuator a chance to check if it's
+		// time to cleanup the old key.
+		if len(allUserKeys.AccessKeyMetadata) > 1 {
 			return true, nil
 		}
 
@@ -352,7 +368,7 @@ func (a *AWSActuator) syncPassthrough(ctx context.Context, cr *minterv1.Credenti
 	accessKeyID := string(cloudCredsSecret.Data[awsannotator.AwsAccessKeyName])
 	secretAccessKey := string(cloudCredsSecret.Data[awsannotator.AwsSecretAccessKeyName])
 	// userPolicy param empty because in passthrough mode this doesn't really have any meaning
-	err := a.syncAccessKeySecret(cr, accessKeyID, secretAccessKey, existingSecret, "", logger)
+	err := a.syncAccessKeySecret(cr, accessKeyID, secretAccessKey, existingSecret, "", false, logger)
 	if err != nil {
 		msg := "error creating/updating secret"
 		logger.WithError(err).Error(msg)
@@ -485,6 +501,7 @@ func (a *AWSActuator) syncMint(ctx context.Context, cr *minterv1.CredentialsRequ
 		logger.Info("successfully set user policy")
 	}
 
+	// TODO: second time we looked this up, we already did the query in needsUpdate.
 	logger.Debug("sync ListAccessKeys")
 	allUserKeys, err := readAWSClient.ListAccessKeys(&iam.ListAccessKeysInput{UserName: aws.String(awsStatus.User)})
 	if err != nil {
@@ -509,19 +526,43 @@ func (a *AWSActuator) syncMint(ctx context.Context, cr *minterv1.CredentialsRequ
 		}
 	}
 
-	genNewAccessKey := existingSecret == nil || existingSecret.Name == "" || existingAccessKeyID == "" || !accessKeyExists
+	isDueForRotation := utils.CredentialIsDueForRotation(cr)
+	genNewAccessKey := isDueForRotation || existingSecret == nil || existingSecret.Name == "" || existingAccessKeyID == "" || !accessKeyExists
 	if genNewAccessKey {
 		logger.Info("generating new AWS access key")
 
-		// Users are allowed a max of two keys, if we decided we need to generate one,
-		// we should cleanup all pre-existing access keys. This will allow deleting the
-		// secret in Kubernetes to revoke old credentials and create new.
 		if rootAWSClient == nil {
 			return fmt.Errorf("no root AWS client available, cred secret may not exist: %s/%s", constants.CloudCredSecretNamespace, constants.AWSCloudCredSecretName)
 		}
-		err := a.deleteAllAccessKeys(logger, rootAWSClient, awsStatus.User, allUserKeys)
-		if err != nil {
-			return err
+
+		// Users are allowed a max of two keys, if we decided we need to generate one,
+		// we will preserve the newest and delete any others for safe rotation. The old credentials will live on until
+		// the next rotation interval.
+		// Sort by creation date:
+		accessKeys := make([]*iam.AccessKeyMetadata, len(allUserKeys.AccessKeyMetadata))
+		copy(accessKeys, allUserKeys.AccessKeyMetadata)
+		sort.Slice(accessKeys, func(i, j int) bool {
+			return accessKeys[i].CreateDate.After(*accessKeys[j].CreateDate)
+		})
+		logger.WithField("accessKeys", allUserKeys.AccessKeyMetadata).Info("sorted access keys")
+		logger.WithFields(log.Fields{
+			"accessKeyID": accessKeys[0].AccessKeyId,
+			"createTime":  accessKeys[0].CreateDate,
+		}).Info("key will be preserved")
+		// AWS presently limits to 2 but just in case this changes on us:
+		for _, key := range accessKeys[1:] {
+			akLog := logger.WithFields(log.Fields{
+				"accessKeyID": key.AccessKeyId,
+				"createTime":  key.CreateDate,
+			})
+
+			_, err := rootAWSClient.DeleteAccessKey(&iam.DeleteAccessKeyInput{AccessKeyId: key.AccessKeyId,
+				UserName: aws.String(awsStatus.User)})
+			if err != nil {
+				akLog.WithError(err).Error("error deleting access key")
+				return err
+			}
+			akLog.Info("key deleted successfully")
 		}
 
 		accessKey, err = a.createAccessKey(logger, rootAWSClient, awsStatus.User)
@@ -537,7 +578,7 @@ func (a *AWSActuator) syncMint(ctx context.Context, cr *minterv1.CredentialsRequ
 		accessKeyString = *accessKey.AccessKeyId
 		secretAccessKeyString = *accessKey.SecretAccessKey
 	}
-	err = a.syncAccessKeySecret(cr, accessKeyString, secretAccessKeyString, existingSecret, desiredUserPolicy, logger)
+	err = a.syncAccessKeySecret(cr, accessKeyString, secretAccessKeyString, existingSecret, desiredUserPolicy, true, logger)
 	if err != nil {
 		log.WithError(err).Error("error saving access key to secret")
 		return err
@@ -816,6 +857,7 @@ func (a *AWSActuator) buildReadAWSClient(cr *minterv1.CredentialsRequest) (minte
 		if aerr, ok := err.(awserr.Error); ok {
 			switch aerr.Code() {
 			case "InvalidClientTokenId":
+				// TODO: test rotation against removed root cred post-install
 				logger.Warn("InvalidClientTokenId for read-only AWS account, likely a propagation delay, falling back to root AWS client")
 				return a.buildRootAWSClient(cr)
 			}
@@ -832,7 +874,15 @@ func (a *AWSActuator) getLogger(cr *minterv1.CredentialsRequest) log.FieldLogger
 	})
 }
 
-func (a *AWSActuator) syncAccessKeySecret(cr *minterv1.CredentialsRequest, accessKeyID, secretAccessKey string, existingSecret *corev1.Secret, userPolicy string, logger log.FieldLogger) error {
+func (a *AWSActuator) syncAccessKeySecret(
+	cr *minterv1.CredentialsRequest,
+	accessKeyID string,
+	secretAccessKey string,
+	existingSecret *corev1.Secret,
+	userPolicy string,
+	includeRotatedTimestamp bool,
+	logger log.FieldLogger) error {
+
 	sLog := logger.WithFields(log.Fields{
 		"targetSecret": fmt.Sprintf("%s/%s", cr.Spec.SecretRef.Namespace, cr.Spec.SecretRef.Name),
 		"cr":           fmt.Sprintf("%s/%s", cr.Namespace, cr.Name),
@@ -862,6 +912,9 @@ func (a *AWSActuator) syncAccessKeySecret(cr *minterv1.CredentialsRequest, acces
 				"aws_secret_access_key": []byte(secretAccessKey),
 			},
 		}
+		if includeRotatedTimestamp {
+			secret.Data[constants.SecretRotatedTimestampKey] = []byte(time.Now().Format(time.RFC3339))
+		}
 
 		err := a.Client.Create(context.TODO(), secret)
 		if err != nil {
@@ -883,6 +936,9 @@ func (a *AWSActuator) syncAccessKeySecret(cr *minterv1.CredentialsRequest, acces
 	if accessKeyID != "" && secretAccessKey != "" {
 		existingSecret.Data["aws_access_key_id"] = []byte(accessKeyID)
 		existingSecret.Data["aws_secret_access_key"] = []byte(secretAccessKey)
+	}
+	if includeRotatedTimestamp {
+		existingSecret.Data[constants.SecretRotatedTimestampKey] = []byte(time.Now().Format(time.RFC3339))
 	}
 
 	if !reflect.DeepEqual(existingSecret, origSecret) {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -11,7 +12,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	utilrand "k8s.io/apimachinery/pkg/util/rand"
-
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	log "github.com/sirupsen/logrus"
@@ -178,10 +178,13 @@ func GetLegacyConfigMap(kubeClient client.Client) (*corev1.ConfigMap, error) {
 // GetOperatorConfiguration will return the value in the operator config (reporting "manual" mode if necessary),
 // and whether there is a conflict between the legacy ConfigMap and CCO config (in the even of a conflict, the
 // operator mode will be reported to reflect the actual value in the operator config).
+// Note that if no mode is configured, the default mode of "" will be returned and the caller must fall back to
+// examining the annotations on the root cloud credential Secret for that platform.
 func GetOperatorConfiguration(kubeClient client.Client, logger log.FieldLogger) (
 	effectiveOperatorMode operatorv1.CloudCredentialsMode,
 	configurationConflict bool,
 	err error) {
+
 	var operatorMode operatorv1.CloudCredentialsMode
 	operatorMode, err = getOperatorMode(kubeClient, logger)
 	if err != nil {
@@ -286,4 +289,12 @@ func IsValidMode(operatorMode operatorv1.CloudCredentialsMode) bool {
 	default:
 		return false
 	}
+}
+
+func CredentialIsDueForRotation(cr *minterv1.CredentialsRequest) bool {
+	// TODO: restore a proper interval
+	//expiryDur := time.Duration(expireHours * 60 * 60 * 1000 * 1000 * 1000)
+	expiryDur := 3 * time.Minute
+	return cr.Status.MintedTimestamp != nil &&
+		time.Now().After(cr.Status.MintedTimestamp.Time.Add(expiryDur))
 }

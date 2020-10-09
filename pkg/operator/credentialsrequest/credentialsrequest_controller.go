@@ -382,7 +382,7 @@ func (r *ReconcileCredentialsRequest) Reconcile(request reconcile.Request) (reco
 		logger.WithError(err).Error("error checking if operator is disabled")
 		return reconcile.Result{}, err
 	} else if conflict {
-		logger.Error("configuration conflict betwen legacy configmap and operator config")
+		logger.Error("configuration conflict between legacy configmap and operator config")
 		return reconcile.Result{}, fmt.Errorf("configuration conflict")
 	} else if mode == operatorv1.CloudCredentialsModeManual {
 		logger.Infof("operator set to disabled / manual mode")
@@ -536,13 +536,27 @@ func (r *ReconcileCredentialsRequest) Reconcile(request reconcile.Request) (reco
 		log.WithError(err).Debug("error retrieving cloud credentials secret, admin can remove root credentials in mint mode")
 	}
 	cloudCredsSecretUpdated := credentialsRootSecret != nil && credentialsRootSecret.ResourceVersion != cr.Status.LastSyncCloudCredsSecretResourceVersion
+
+	// TODO: this needs to happen only if we're in mint mode, but we don't know that unless we
+	// examine a per cloud secret annotation. I'd like this whole mechanism replaced with a new
+	// controller that sets the actual mode onto CloudCredential.Status.
+	changed, err := r.reconcileMintTimestamp(logger, cr, crSecret)
+	if changed || err != nil {
+		return reconcile.Result{}, err
+	}
+
 	isStale := cr.Generation != cr.Status.LastSyncGeneration
 	hasRecentlySynced := cr.Status.LastSyncTimestamp != nil && cr.Status.LastSyncTimestamp.Add(time.Hour*1).After(time.Now())
 	hasActiveFailureConditions := checkForFailureConditions(cr)
 
-	if !cloudCredsSecretUpdated && !isStale && hasRecentlySynced && crSecretExists && !hasActiveFailureConditions && cr.Status.Provisioned {
-		logger.Debug("lastsyncgeneration is current and lastsynctimestamp was less than an hour ago, so no need to sync")
-		return reconcile.Result{}, nil
+	// TODO: we need to check for mint mode here
+	isDueForRotation := utils.CredentialIsDueForRotation(cr)
+	if !cloudCredsSecretUpdated && !isStale && !isDueForRotation && hasRecentlySynced && crSecretExists && !hasActiveFailureConditions && cr.Status.Provisioned {
+		// TODO: let actuator decide?
+		logger.Debug("sync is not required")
+		// TODO: remove requeue after
+		return reconcile.Result{RequeueAfter: 1 * time.Minute}, nil
+
 	}
 
 	credsExists, err := r.Actuator.Exists(context.TODO(), cr)
@@ -559,8 +573,8 @@ func (r *ReconcileCredentialsRequest) Reconcile(request reconcile.Request) (reco
 	}
 	if syncErr != nil {
 		logger.Errorf("error syncing credentials: %v", syncErr)
-		// TODO: set condition if previously satisfied credrequest can now
-		// not be satisfied (but keeping provisioned==True).
+		// TODO: set condition if previously satisfied CredentialsRequest can no
+		// longer be satisfied (but keeping provisioned==True).
 		cr.Status.Provisioned = false
 
 		switch t := syncErr.(type) {
@@ -568,7 +582,7 @@ func (r *ReconcileCredentialsRequest) Reconcile(request reconcile.Request) (reco
 			logger.Errorf("errored with condition: %v", t.Reason())
 			r.updateActuatorConditions(cr, t.Reason(), syncErr)
 		default:
-			logger.Errorf("unexpected error while syncing credentialsrequest: %v", syncErr)
+			logger.Errorf("unexpected error while syncing CredentialsRequest: %v", syncErr)
 			return reconcile.Result{}, syncErr
 		}
 
@@ -592,7 +606,39 @@ func (r *ReconcileCredentialsRequest) Reconcile(request reconcile.Request) (reco
 		return reconcile.Result{}, err
 	}
 
-	return reconcile.Result{}, syncErr
+	// TODO: let the actuators tell us when to reconcile again?
+	return reconcile.Result{RequeueAfter: 1 * time.Minute}, syncErr
+}
+
+func (r *ReconcileCredentialsRequest) reconcileMintTimestamp(logger log.FieldLogger, cr *minterv1.CredentialsRequest, crSecret *corev1.Secret) (bool, error) {
+	// Set the MintTimestamp:
+	var changed bool
+	if secTimestampStr, ok := crSecret.Data[constants.SecretRotatedTimestampKey]; ok {
+		parsedTS, err := time.Parse(time.RFC3339, string(secTimestampStr))
+		if err != nil {
+			logger.WithError(err).Errorf("error parsing Secret %s/%s key %s: %s",
+				crSecret.Name, crSecret.Namespace, constants.SecretRotatedTimestampKey, secTimestampStr)
+			return changed, err
+		}
+		mvt := metav1.NewTime(parsedTS)
+		if cr.Status.MintedTimestamp == nil || !cr.Status.MintedTimestamp.Equal(&mvt) {
+			logger.Info("setting mintedTimestamp to Secret data mintedTimestamp")
+			cr.Status.MintedTimestamp = &mvt
+			changed = true
+		}
+	} else if cr.Status.MintedTimestamp == nil {
+		// No timestamp set and secret does not contain one, most likely a legacy secret, use
+		// the target Secret CreationTimestamp.
+		logger.Info("setting mintedTimestamp to Secret creationTimestamp")
+		cr.Status.MintedTimestamp = &crSecret.CreationTimestamp
+		changed = true
+	}
+
+	var err error
+	if changed {
+		err = r.Status().Update(context.TODO(), cr)
+	}
+	return changed, err
 }
 
 func (r *ReconcileCredentialsRequest) updateActuatorConditions(cr *minterv1.CredentialsRequest, reason minterv1.CredentialsRequestConditionType, conditionError error) {

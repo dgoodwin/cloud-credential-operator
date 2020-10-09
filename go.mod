@@ -12,7 +12,9 @@ require (
 	github.com/Azure/go-autorest/autorest/to v0.3.0
 	github.com/Azure/go-autorest/autorest/validation v0.2.0 // indirect
 	github.com/aws/aws-sdk-go v1.30.5
+	github.com/containerd/fifo v0.0.0-20200410184934-f15a3290365b // indirect
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
+	github.com/docker/docker v0.7.3-0.20190327010347-be7ac8be2ae0
 	github.com/go-bindata/go-bindata v3.1.2+incompatible
 	github.com/go-logr/logr v0.2.1-0.20200730175230-ee2de8da5be6 // indirect
 	github.com/go-logr/zapr v0.2.0 // indirect
@@ -47,5 +49,8 @@ require (
 	k8s.io/apimachinery v0.19.0
 	k8s.io/client-go v0.19.0
 	k8s.io/code-generator v0.19.0
+	k8s.io/utils v0.0.0-20200729134348-d5654de09c73
 	sigs.k8s.io/controller-runtime v0.6.2
 )
+
+//replace openshift/api => github.com/dgoodwin/api v0.0.0-20201009163052-dcf107d6e737

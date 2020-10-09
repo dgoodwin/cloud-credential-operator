@@ -228,6 +228,10 @@ func (in *CredentialsRequestStatus) DeepCopyInto(out *CredentialsRequestStatus) 
 		in, out := &in.LastSyncTimestamp, &out.LastSyncTimestamp
 		*out = (*in).DeepCopy()
 	}
+	if in.MintedTimestamp != nil {
+		in, out := &in.MintedTimestamp, &out.MintedTimestamp
+		*out = (*in).DeepCopy()
+	}
 	if in.ProviderStatus != nil {
 		in, out := &in.ProviderStatus, &out.ProviderStatus
 		*out = new(runtime.RawExtension)

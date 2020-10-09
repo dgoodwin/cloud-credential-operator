@@ -114,6 +114,8 @@ const (
 	// VSphereCloudCredSecretName is the name of the secret where credentials
 	// for vSphere are stored.
 	VSphereCloudCredSecretName = "vsphere-creds"
+
+	SecretRotatedTimestampKey = "rotated-timestamp"
 )
 
 var (
