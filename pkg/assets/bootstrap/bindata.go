@@ -195,6 +195,12 @@ spec:
                 last synced.
               type: string
               format: date-time
+            mintTimestamp:
+              description: MintTimestamp is the time the credentials were last minted.
+                It will only be set if using mint mode, and will be updated whenever
+                credentials expire if using rotation.
+              type: string
+              format: date-time
             providerStatus:
               description: ProviderStatus contains cloud provider specific status.
               type: object
