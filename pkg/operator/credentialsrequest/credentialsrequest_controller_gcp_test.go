@@ -95,6 +95,8 @@ func TestCredentialsRequestGCPReconcile(t *testing.T) {
 		return
 	}
 
+	sixHoursAgo := metav1.NewTime(time.Now().Add(-6 * time.Hour))
+
 	tests := []struct {
 		name              string
 		existing          []runtime.Object
@@ -114,7 +116,7 @@ func TestCredentialsRequestGCPReconcile(t *testing.T) {
 				createTestNamespace(testNamespace),
 				createTestNamespace(testSecretNamespace),
 				testGCPCredsSecret("kube-system", constants.GCPCloudCredSecretName, testRootGCPAuth),
-				testGCPCredentialsRequest(t),
+				testGCPCredentialsRequest(t, nil),
 				testClusterVersion(),
 				testInfrastructure(testInfraName),
 			},
@@ -150,12 +152,12 @@ func TestCredentialsRequestGCPReconcile(t *testing.T) {
 			},
 		},
 		{
-			name: "new credential cluster has no infra name",
+			name: "new credential request cluster has no infra name",
 			existing: []runtime.Object{
 				testOperatorConfig(""),
 				createTestNamespace(testNamespace),
 				createTestNamespace(testSecretNamespace),
-				testGCPCredentialsRequest(t),
+				testGCPCredentialsRequest(t, nil),
 				testGCPCredsSecret("kube-system", constants.GCPCloudCredSecretName, testRootGCPAuth),
 				testClusterVersion(),
 				testInfrastructure(""),
@@ -197,7 +199,7 @@ func TestCredentialsRequestGCPReconcile(t *testing.T) {
 				testOperatorConfig(""),
 				createTestNamespace(testNamespace),
 				createTestNamespace(testSecretNamespace),
-				testGCPCredentialsRequest(t),
+				testGCPCredentialsRequest(t, nil),
 				testClusterVersion(),
 				testInfrastructure(testInfraName),
 			},
@@ -225,7 +227,7 @@ func TestCredentialsRequestGCPReconcile(t *testing.T) {
 				testOperatorConfig(""),
 				createTestNamespace(testNamespace),
 				createTestNamespace(testSecretNamespace),
-				testGCPCredentialsRequest(t),
+				testGCPCredentialsRequest(t, nil),
 				testClusterVersion(),
 				testInfrastructure(testInfraName),
 
@@ -268,7 +270,7 @@ func TestCredentialsRequestGCPReconcile(t *testing.T) {
 				testOperatorConfig(""),
 				createTestNamespace(testNamespace),
 				createTestNamespace(testSecretNamespace),
-				testGCPCredentialsRequest(t),
+				testGCPCredentialsRequest(t, &sixHoursAgo),
 				testGCPCredsSecret("kube-system", constants.GCPCloudCredSecretName, testRootGCPAuth),
 				testClusterVersion(),
 				testInfrastructure(testInfraName),
@@ -309,7 +311,7 @@ func TestCredentialsRequestGCPReconcile(t *testing.T) {
 				testOperatorConfig(""),
 				createTestNamespace(testNamespace),
 				createTestNamespace(testSecretNamespace),
-				testGCPCredentialsRequest(t),
+				testGCPCredentialsRequest(t, &sixHoursAgo),
 				testGCPCredsSecret("kube-system", constants.GCPCloudCredSecretName, testRootGCPAuth),
 				testGCPCredsSecret(testSecretNamespace, testSecretName, testServiceAccountKeyPrivateData),
 				testClusterVersion(),
@@ -354,7 +356,7 @@ func TestCredentialsRequestGCPReconcile(t *testing.T) {
 
 				// already minted, last synced 2 hours ago
 				func() *minterv1.CredentialsRequest {
-					cr := testGCPCredentialsRequest(t)
+					cr := testGCPCredentialsRequest(t, &sixHoursAgo)
 					cr.Status.Provisioned = true
 					cr.Status.LastSyncTimestamp = &metav1.Time{Time: time.Now().Add(-2 * time.Hour)}
 
@@ -398,7 +400,7 @@ func TestCredentialsRequestGCPReconcile(t *testing.T) {
 
 				// already minted, last synced 2 hours ago
 				func() *minterv1.CredentialsRequest {
-					cr := testGCPCredentialsRequest(t)
+					cr := testGCPCredentialsRequest(t, &sixHoursAgo)
 					cr.Status.Provisioned = true
 					cr.Status.LastSyncTimestamp = &metav1.Time{Time: time.Now().Add(-2 * time.Hour)}
 
@@ -482,7 +484,7 @@ func TestCredentialsRequestGCPReconcile(t *testing.T) {
 			existing: []runtime.Object{
 				testOperatorConfig(""),
 				createTestNamespace(testSecretNamespace),
-				testGCPCredentialsRequest(t),
+				testGCPCredentialsRequest(t, nil),
 				testGCPCredsSecret("kube-system", constants.GCPCloudCredSecretName, testRootGCPAuth),
 				testClusterVersion(),
 				testInfrastructure(testInfraName),
@@ -542,7 +544,7 @@ func TestCredentialsRequestGCPReconcile(t *testing.T) {
 			existing: []runtime.Object{
 				testOperatorConfig(""),
 				createTestNamespace(testSecretNamespace),
-				testGCPCredentialsRequest(t),
+				testGCPCredentialsRequest(t, nil),
 				testGCPCredsSecretPassthrough("kube-system", constants.GCPCloudCredSecretName, testRootGCPAuth),
 				testClusterVersion(),
 				testInfrastructure(testInfraName),
@@ -576,7 +578,7 @@ func TestCredentialsRequestGCPReconcile(t *testing.T) {
 			existing: []runtime.Object{
 				testOperatorConfig(""),
 				createTestNamespace(testSecretNamespace),
-				testGCPCredentialsRequest(t),
+				testGCPCredentialsRequest(t, nil),
 				testGCPCredsSecretPassthrough("kube-system", constants.GCPCloudCredSecretName, testRootGCPAuth),
 				testClusterVersion(),
 				testInfrastructure(testInfraName),
@@ -613,7 +615,7 @@ func TestCredentialsRequestGCPReconcile(t *testing.T) {
 			existing: []runtime.Object{
 				testOperatorConfig(""),
 				createTestNamespace(testSecretNamespace),
-				testGCPPassthroughCredentialsRequest(t),
+				testGCPPassthroughCredentialsRequest(t, &sixHoursAgo),
 				testGCPCredsSecretPassthrough("kube-system", constants.GCPCloudCredSecretName, testRootGCPAuth),
 				testGCPCredsSecret(testSecretNamespace, testSecretName, testRootGCPAuth),
 				testClusterVersion(),
@@ -646,7 +648,7 @@ func TestCredentialsRequestGCPReconcile(t *testing.T) {
 			existing: []runtime.Object{
 				testOperatorConfig(""),
 				createTestNamespace(testSecretNamespace),
-				testGCPPassthroughCredentialsRequest(t),
+				testGCPPassthroughCredentialsRequest(t, &sixHoursAgo),
 				testGCPCredsSecretPassthrough("kube-system", constants.GCPCloudCredSecretName, testRootGCPAuth),
 				testGCPCredsSecret(testSecretNamespace, testSecretName, testOldPassthroughPrivateData),
 				testClusterVersion(),
@@ -735,6 +737,7 @@ func TestCredentialsRequestGCPReconcile(t *testing.T) {
 
 			cr := getCredRequest(fakeClient)
 			for _, condition := range test.expectedConditions {
+				log.WithField("expectedCondition", condition).Info("looking for")
 				foundCondition := utils.FindCredentialsRequestCondition(cr.Status.Conditions, condition.conditionType)
 				assert.NotNil(t, foundCondition)
 				assert.Exactly(t, condition.status, foundCondition.Status)
@@ -759,8 +762,8 @@ func TestCredentialsRequestGCPReconcile(t *testing.T) {
 	}
 }
 
-func testGCPCredentialsRequest(t *testing.T) *minterv1.CredentialsRequest {
-	cr := testGCPPassthroughCredentialsRequest(t)
+func testGCPCredentialsRequest(t *testing.T, mintTime *metav1.Time) *minterv1.CredentialsRequest {
+	cr := testGCPPassthroughCredentialsRequest(t, mintTime)
 
 	codec, err := minterv1.NewCodec()
 	if err != nil {
@@ -788,14 +791,14 @@ func testGCPCredentialsRequest(t *testing.T) *minterv1.CredentialsRequest {
 }
 
 func testGCPCredentialsRequestWithDeletionTimestamp(t *testing.T) *minterv1.CredentialsRequest {
-	cr := testGCPCredentialsRequest(t)
+	cr := testGCPCredentialsRequest(t, nil)
 	now := metav1.Now()
 	cr.DeletionTimestamp = &now
 	cr.Status.Provisioned = true
 	return cr
 }
 
-func testGCPPassthroughCredentialsRequest(t *testing.T) *minterv1.CredentialsRequest {
+func testGCPPassthroughCredentialsRequest(t *testing.T, mintTime *metav1.Time) *minterv1.CredentialsRequest {
 	codec, err := minterv1.NewCodec()
 	if err != nil {
 		t.Logf("error creating new codec: %v", err)
@@ -830,6 +833,9 @@ func testGCPPassthroughCredentialsRequest(t *testing.T) *minterv1.CredentialsReq
 		Spec: minterv1.CredentialsRequestSpec{
 			SecretRef:    corev1.ObjectReference{Name: testSecretName, Namespace: testSecretNamespace},
 			ProviderSpec: gcpProvSpec,
+		},
+		Status: minterv1.CredentialsRequestStatus{
+			MintedTimestamp: mintTime,
 		},
 	}
 }

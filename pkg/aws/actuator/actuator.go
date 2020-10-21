@@ -535,34 +535,45 @@ func (a *AWSActuator) syncMint(ctx context.Context, cr *minterv1.CredentialsRequ
 			return fmt.Errorf("no root AWS client available, cred secret may not exist: %s/%s", constants.CloudCredSecretNamespace, constants.AWSCloudCredSecretName)
 		}
 
-		// Users are allowed a max of two keys, if we decided we need to generate one,
-		// we will preserve the newest and delete any others for safe rotation. The old credentials will live on until
-		// the next rotation interval.
-		// Sort by creation date:
-		accessKeys := make([]*iam.AccessKeyMetadata, len(allUserKeys.AccessKeyMetadata))
-		copy(accessKeys, allUserKeys.AccessKeyMetadata)
-		sort.Slice(accessKeys, func(i, j int) bool {
-			return accessKeys[i].CreateDate.After(*accessKeys[j].CreateDate)
-		})
-		logger.WithField("accessKeys", allUserKeys.AccessKeyMetadata).Info("sorted access keys")
-		logger.WithFields(log.Fields{
-			"accessKeyID": accessKeys[0].AccessKeyId,
-			"createTime":  accessKeys[0].CreateDate,
-		}).Info("key will be preserved")
-		// AWS presently limits to 2 but just in case this changes on us:
-		for _, key := range accessKeys[1:] {
-			akLog := logger.WithFields(log.Fields{
-				"accessKeyID": key.AccessKeyId,
-				"createTime":  key.CreateDate,
+		if len(allUserKeys.AccessKeyMetadata) > 0 {
+			// Users are allowed a max of two keys, if we decided we need to generate one,
+			// we will preserve the newest and delete any others for safe rotation. The old credentials will live on until
+			// the next rotation interval.
+			// Sort by creation date:
+			accessKeys := make([]*iam.AccessKeyMetadata, len(allUserKeys.AccessKeyMetadata))
+			copy(accessKeys, allUserKeys.AccessKeyMetadata)
+			sort.Slice(accessKeys, func(i, j int) bool {
+				return accessKeys[i].CreateDate.After(*accessKeys[j].CreateDate)
 			})
+			logger.WithField("accessKeys", allUserKeys.AccessKeyMetadata).Info("sorted access keys")
+			if existingSecret == nil || existingSecret.Name == "" {
+				logger.Info("deleting all current access keys as the target secret does not exist")
+				// If the existing secret is gone we will delete all existing access keys, no point preserving any
+				err = a.deleteAllAccessKeys(logger, rootAWSClient, awsStatus.User, allUserKeys)
+				if err != nil {
+					return err
+				}
+			} else {
+				logger.WithFields(log.Fields{
+					"accessKeyID": accessKeys[0].AccessKeyId,
+					"createTime":  accessKeys[0].CreateDate,
+				}).Info("key will be preserved")
+				// AWS presently limits to 2 but just in case this changes on us:
+				for _, key := range accessKeys[1:] {
+					akLog := logger.WithFields(log.Fields{
+						"accessKeyID": key.AccessKeyId,
+						"createTime":  key.CreateDate,
+					})
 
-			_, err := rootAWSClient.DeleteAccessKey(&iam.DeleteAccessKeyInput{AccessKeyId: key.AccessKeyId,
-				UserName: aws.String(awsStatus.User)})
-			if err != nil {
-				akLog.WithError(err).Error("error deleting access key")
-				return err
+					_, err := rootAWSClient.DeleteAccessKey(&iam.DeleteAccessKeyInput{AccessKeyId: key.AccessKeyId,
+						UserName: aws.String(awsStatus.User)})
+					if err != nil {
+						akLog.WithError(err).Error("error deleting access key")
+						return err
+					}
+					akLog.Info("key deleted successfully")
+				}
 			}
-			akLog.Info("key deleted successfully")
 		}
 
 		accessKey, err = a.createAccessKey(logger, rootAWSClient, awsStatus.User)

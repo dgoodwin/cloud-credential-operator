@@ -611,6 +611,9 @@ func (r *ReconcileCredentialsRequest) Reconcile(request reconcile.Request) (reco
 }
 
 func (r *ReconcileCredentialsRequest) reconcileMintTimestamp(logger log.FieldLogger, cr *minterv1.CredentialsRequest, crSecret *corev1.Secret) (bool, error) {
+	if crSecret == nil || crSecret.Name == "" {
+		return false, nil
+	}
 	// Set the MintTimestamp:
 	var changed bool
 	if secTimestampStr, ok := crSecret.Data[constants.SecretRotatedTimestampKey]; ok {

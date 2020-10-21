@@ -292,9 +292,7 @@ func IsValidMode(operatorMode operatorv1.CloudCredentialsMode) bool {
 }
 
 func CredentialIsDueForRotation(cr *minterv1.CredentialsRequest) bool {
-	// TODO: restore a proper interval
-	//expiryDur := time.Duration(expireHours * 60 * 60 * 1000 * 1000 * 1000)
-	expiryDur := 3 * time.Minute
+	expiryDur := 12 * time.Hour
 	return cr.Status.MintedTimestamp != nil &&
 		time.Now().After(cr.Status.MintedTimestamp.Time.Add(expiryDur))
 }

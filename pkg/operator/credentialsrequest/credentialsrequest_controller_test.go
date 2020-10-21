@@ -105,6 +105,8 @@ func TestAWSCredentialsRequestReconcile(t *testing.T) {
 		return
 	}
 
+	sixHoursAgo := metav1.NewTime(time.Now().Add(-6 * time.Hour))
+
 	tests := []struct {
 		name                string
 		existing            []runtime.Object
@@ -125,7 +127,7 @@ func TestAWSCredentialsRequestReconcile(t *testing.T) {
 				createTestNamespace(testNamespace),
 				createTestNamespace(testSecretNamespace),
 				func() *minterv1.CredentialsRequest {
-					cr := testCredentialsRequest(t)
+					cr := testCredentialsRequest(t, nil)
 					// Remove the finalizer
 					cr.ObjectMeta.Finalizers = []string{}
 					return cr
@@ -151,7 +153,7 @@ func TestAWSCredentialsRequestReconcile(t *testing.T) {
 				testOperatorConfig(""),
 				createTestNamespace(testNamespace),
 				createTestNamespace(testSecretNamespace),
-				testCredentialsRequest(t),
+				testCredentialsRequest(t, nil),
 				testAWSCredsSecret("kube-system", "aws-creds", testRootAWSAccessKeyID, testRootAWSSecretAccessKey),
 				testAWSCredsSecret("openshift-cloud-credential-operator", "cloud-credential-operator-iam-ro-creds", testReadAWSAccessKeyID, testReadAWSSecretAccessKey),
 				testClusterVersion(),
@@ -193,7 +195,7 @@ func TestAWSCredentialsRequestReconcile(t *testing.T) {
 				testOperatorConfig(""),
 				createTestNamespace(testNamespace),
 				createTestNamespace(testSecretNamespace),
-				testCredentialsRequest(t),
+				testCredentialsRequest(t, nil),
 				testAWSCredsSecret("kube-system", "aws-creds", testRootAWSAccessKeyID, testRootAWSSecretAccessKey),
 				testAWSCredsSecret("openshift-cloud-credential-operator", "cloud-credential-operator-iam-ro-creds", testReadAWSAccessKeyID, testReadAWSSecretAccessKey),
 				testClusterVersion(),
@@ -236,7 +238,7 @@ func TestAWSCredentialsRequestReconcile(t *testing.T) {
 				testOperatorConfig(""),
 				createTestNamespace(testNamespace),
 				createTestNamespace(testSecretNamespace),
-				testCredentialsRequest(t),
+				testCredentialsRequest(t, nil),
 				testAWSCredsSecret("kube-system", "aws-creds", testRootAWSAccessKeyID, testRootAWSSecretAccessKey),
 				testClusterVersion(),
 				testInfrastructure(testInfraName),
@@ -272,7 +274,7 @@ func TestAWSCredentialsRequestReconcile(t *testing.T) {
 				testOperatorConfig(""),
 				createTestNamespace(testNamespace),
 				createTestNamespace(testSecretNamespace),
-				testCredentialsRequest(t),
+				testCredentialsRequest(t, nil),
 				testAWSCredsSecret("openshift-cloud-credential-operator", "cloud-credential-operator-iam-ro-creds", testReadAWSAccessKeyID, testReadAWSSecretAccessKey),
 				testClusterVersion(),
 				testInfrastructure(testInfraName),
@@ -309,7 +311,7 @@ func TestAWSCredentialsRequestReconcile(t *testing.T) {
 				testOperatorConfig(""),
 				createTestNamespace(testNamespace),
 				createTestNamespace(testSecretNamespace),
-				testCredentialsRequest(t),
+				testCredentialsRequest(t, &sixHoursAgo),
 				testAWSCredsSecret("kube-system", "aws-creds", testRootAWSAccessKeyID, testRootAWSSecretAccessKey),
 				testAWSCredsSecret("openshift-cloud-credential-operator", "cloud-credential-operator-iam-ro-creds", testReadAWSAccessKeyID, testReadAWSSecretAccessKey),
 				testAWSCredsSecret(testSecretNamespace, testSecretName, testAWSAccessKeyID, testAWSSecretAccessKey),
@@ -345,7 +347,7 @@ func TestAWSCredentialsRequestReconcile(t *testing.T) {
 				testOperatorConfig(""),
 				createTestNamespace(testNamespace),
 				createTestNamespace(testSecretNamespace),
-				testCredentialsRequest(t),
+				testCredentialsRequest(t, &sixHoursAgo),
 				testAWSCredsSecret("kube-system", "aws-creds", testRootAWSAccessKeyID, testRootAWSSecretAccessKey),
 				testAWSCredsSecret("openshift-cloud-credential-operator", "cloud-credential-operator-iam-ro-creds", testReadAWSAccessKeyID, testReadAWSSecretAccessKey),
 				testAWSCredsSecret(testSecretNamespace, testSecretName, testAWSAccessKeyID, testAWSSecretAccessKey),
@@ -386,7 +388,7 @@ func TestAWSCredentialsRequestReconcile(t *testing.T) {
 				testOperatorConfig(""),
 				createTestNamespace(testNamespace),
 				createTestNamespace(testSecretNamespace),
-				testCredentialsRequest(t),
+				testCredentialsRequest(t, &sixHoursAgo),
 				testAWSCredsSecret("openshift-cloud-credential-operator", "cloud-credential-operator-iam-ro-creds", testReadAWSAccessKeyID, testReadAWSSecretAccessKey),
 				testAWSCredsSecret(testSecretNamespace, testSecretName, testAWSAccessKeyID, testAWSSecretAccessKey),
 				testClusterVersion(),
@@ -421,7 +423,7 @@ func TestAWSCredentialsRequestReconcile(t *testing.T) {
 				testOperatorConfig(""),
 				createTestNamespace(testNamespace),
 				createTestNamespace(testSecretNamespace),
-				testCredentialsRequest(t),
+				testCredentialsRequest(t, &sixHoursAgo),
 				testAWSCredsSecret("openshift-cloud-credential-operator", "cloud-credential-operator-iam-ro-creds", testReadAWSAccessKeyID, testReadAWSSecretAccessKey),
 				testAWSCredsSecret("kube-system", "aws-creds", testRootAWSAccessKeyID, testRootAWSSecretAccessKey),
 				testClusterVersion(),
@@ -459,7 +461,7 @@ func TestAWSCredentialsRequestReconcile(t *testing.T) {
 				testOperatorConfig(""),
 				createTestNamespace(testNamespace),
 				createTestNamespace(testSecretNamespace),
-				testCredentialsRequest(t),
+				testCredentialsRequest(t, &sixHoursAgo),
 				testAWSCredsSecret("kube-system", "aws-creds", testRootAWSAccessKeyID, testRootAWSSecretAccessKey),
 				testAWSCredsSecret("openshift-cloud-credential-operator", "cloud-credential-operator-iam-ro-creds", testReadAWSAccessKeyID, testReadAWSSecretAccessKey),
 				testAWSCredsSecret(testSecretNamespace, testSecretName, testAWSAccessKeyID, testAWSSecretAccessKey),
@@ -498,7 +500,7 @@ func TestAWSCredentialsRequestReconcile(t *testing.T) {
 				testOperatorConfig(""),
 				createTestNamespace(testNamespace),
 				createTestNamespace(testSecretNamespace),
-				testCredentialsRequestWithDeletionTimestamp(t),
+				testCredentialsRequestWithDeletionTimestamp(t, &sixHoursAgo),
 				testAWSCredsSecret("kube-system", "aws-creds", testRootAWSAccessKeyID, testRootAWSSecretAccessKey),
 				testAWSCredsSecret("openshift-cloud-credential-operator", "cloud-credential-operator-iam-ro-creds", testReadAWSAccessKeyID, testReadAWSSecretAccessKey),
 				testAWSCredsSecret(testSecretNamespace, testSecretName, testAWSAccessKeyID, testAWSSecretAccessKey),
@@ -649,7 +651,7 @@ func TestAWSCredentialsRequestReconcile(t *testing.T) {
 			existing: []runtime.Object{
 				testOperatorConfig(""),
 				testInfrastructure(testInfraName),
-				testCredentialsRequest(t),
+				testCredentialsRequest(t, nil),
 			},
 			mockRootAWSClient: func(mockCtrl *gomock.Controller) *mockaws.MockClient {
 				mockAWSClient := mockaws.NewMockClient(mockCtrl)
@@ -669,7 +671,7 @@ func TestAWSCredentialsRequestReconcile(t *testing.T) {
 				testOperatorConfig(""),
 				testInfrastructure(testInfraName),
 				createTestNamespace(testSecretNamespace),
-				testCredentialsRequest(t),
+				testCredentialsRequest(t, nil),
 				testInsufficientAWSCredsSecret("kube-system", "aws-creds", testRootAWSAccessKeyID, testRootAWSSecretAccessKey),
 			},
 			mockRootAWSClient: func(mockCtrl *gomock.Controller) *mockaws.MockClient {
@@ -691,7 +693,7 @@ func TestAWSCredentialsRequestReconcile(t *testing.T) {
 				testOperatorConfig(""),
 				testInfrastructure(testInfraName),
 				createTestNamespace(testSecretNamespace),
-				testCredentialsRequest(t),
+				testCredentialsRequest(t, nil),
 				testAWSCredsSecret("kube-system", "aws-creds", testRootAWSAccessKeyID, testRootAWSSecretAccessKey),
 				testAWSCredsSecret("openshift-cloud-credential-operator", "cloud-credential-operator-iam-ro-creds", testReadAWSAccessKeyID, testReadAWSSecretAccessKey),
 				testClusterVersion(),
@@ -720,7 +722,7 @@ func TestAWSCredentialsRequestReconcile(t *testing.T) {
 				testOperatorConfig(""),
 				createTestNamespace(testSecretNamespace),
 				testInfrastructure(testInfraName),
-				testCredentialsRequestWithDeletionTimestamp(t),
+				testCredentialsRequestWithDeletionTimestamp(t, &sixHoursAgo),
 				testAWSCredsSecret("kube-system", "aws-creds", testRootAWSAccessKeyID, testRootAWSSecretAccessKey),
 				testAWSCredsSecret("openshift-cloud-credential-operator", "cloud-credential-operator-iam-ro-creds", testReadAWSAccessKeyID, testReadAWSSecretAccessKey),
 				testAWSCredsSecret(testNamespace, testSecretName, testAWSAccessKeyID, testAWSSecretAccessKey),
@@ -750,7 +752,7 @@ func TestAWSCredentialsRequestReconcile(t *testing.T) {
 				createTestNamespace(testNamespace),
 				testInfrastructure(testInfraName),
 				createTestNamespace(testSecretNamespace),
-				testCredentialsRequestWithRecentLastSync(t),
+				testCredentialsRequestWithRecentLastSync(t, &sixHoursAgo),
 				testAWSCredsSecret(testSecretNamespace, testSecretName, testAWSAccessKeyID, testAWSSecretAccessKey),
 			},
 			mockRootAWSClient: func(mockCtrl *gomock.Controller) *mockaws.MockClient {
@@ -771,7 +773,7 @@ func TestAWSCredentialsRequestReconcile(t *testing.T) {
 				testClusterVersion(),
 				testAWSCredsSecret("kube-system", "aws-creds", testRootAWSAccessKeyID, testRootAWSSecretAccessKey),
 				createTestNamespace(testSecretNamespace),
-				testCredentialsRequestWithRecentLastSync(t),
+				testCredentialsRequestWithRecentLastSync(t, &sixHoursAgo),
 			},
 			mockRootAWSClient: func(mockCtrl *gomock.Controller) *mockaws.MockClient {
 				mockAWSClient := mockaws.NewMockClient(mockCtrl)
@@ -801,7 +803,7 @@ func TestAWSCredentialsRequestReconcile(t *testing.T) {
 				objects = append(objects, createTestNamespace(testNamespace))
 				objects = append(objects, createTestNamespace(testSecretNamespace))
 
-				cr := testCredentialsRequestWithRecentLastSync(t)
+				cr := testCredentialsRequestWithRecentLastSync(t, &sixHoursAgo)
 				cr.Generation = cr.Generation + 1 // rev the generation to trigger the sync
 				objects = append(objects, cr)
 
@@ -833,7 +835,7 @@ func TestAWSCredentialsRequestReconcile(t *testing.T) {
 			name: "skip nonAWS credreq",
 			existing: []runtime.Object{
 				testOperatorConfig(""),
-				testGCPCredentialsRequest(t),
+				testGCPCredentialsRequest(t, nil),
 			},
 			mockRootAWSClient: func(mockCtrl *gomock.Controller) *mockaws.MockClient {
 				return mockaws.NewMockClient(mockCtrl)
@@ -855,7 +857,7 @@ func TestAWSCredentialsRequestReconcile(t *testing.T) {
 			existing: []runtime.Object{
 				testOperatorConfig(""),
 				func() runtime.Object {
-					cr := testGCPCredentialsRequest(t)
+					cr := testGCPCredentialsRequest(t, nil)
 					for _, cond := range minterv1.FailureConditionTypes {
 						cr.Status.Conditions = append(cr.Status.Conditions, minterv1.CredentialsRequestCondition{
 							Type:   cond,
@@ -881,12 +883,12 @@ func TestAWSCredentialsRequestReconcile(t *testing.T) {
 			},
 		},
 		{
-			name: "pass along any existing permissions boundary",
+			name: "new credential pass along any existing permissions boundary",
 			existing: []runtime.Object{
 				testOperatorConfig(""),
 				createTestNamespace(testNamespace),
 				createTestNamespace(testSecretNamespace),
-				testCredentialsRequest(t),
+				testCredentialsRequest(t, nil),
 				testAWSCredsSecret("kube-system", "aws-creds", testRootAWSAccessKeyID, testRootAWSSecretAccessKey),
 				testAWSCredsSecret("openshift-cloud-credential-operator", "cloud-credential-operator-iam-ro-creds", testReadAWSAccessKeyID, testReadAWSSecretAccessKey),
 				testClusterVersion(),
@@ -930,7 +932,7 @@ func TestAWSCredentialsRequestReconcile(t *testing.T) {
 				createTestNamespace(testNamespace),
 				createTestNamespace(testSecretNamespace),
 				testOperatorConfigMap("true"),
-				testCredentialsRequest(t),
+				testCredentialsRequest(t, nil),
 				testClusterVersion(),
 				testInfrastructure(testInfraName),
 			},
@@ -949,7 +951,7 @@ func TestAWSCredentialsRequestReconcile(t *testing.T) {
 				createTestNamespace(testNamespace),
 				createTestNamespace(testSecretNamespace),
 				testOperatorConfig(operatorv1.CloudCredentialsModeManual),
-				testCredentialsRequest(t),
+				testCredentialsRequest(t, nil),
 				testClusterVersion(),
 				testInfrastructure(testInfraName),
 			},
@@ -969,7 +971,7 @@ func TestAWSCredentialsRequestReconcile(t *testing.T) {
 				createTestNamespace(testSecretNamespace),
 				testOperatorConfig(operatorv1.CloudCredentialsModeManual),
 				testOperatorConfigMap("false"),
-				testCredentialsRequest(t),
+				testCredentialsRequest(t, nil),
 				testClusterVersion(),
 				testInfrastructure(testInfraName),
 			},
@@ -987,7 +989,7 @@ func TestAWSCredentialsRequestReconcile(t *testing.T) {
 			existing: []runtime.Object{
 				testOperatorConfig(""),
 				func() *minterv1.CredentialsRequest {
-					cr := testCredentialsRequestWithRecentLastSync(t)
+					cr := testCredentialsRequestWithRecentLastSync(t, &sixHoursAgo)
 					cr.Status.Conditions = utils.SetCredentialsRequestCondition(cr.Status.Conditions,
 						minterv1.CredentialsProvisionFailure, corev1.ConditionTrue, credentialsProvisionFailure,
 						"Please investigate", utils.UpdateConditionAlways)
@@ -1020,7 +1022,7 @@ func TestAWSCredentialsRequestReconcile(t *testing.T) {
 			existing: []runtime.Object{
 				testOperatorConfig(""),
 				func() *minterv1.CredentialsRequest {
-					cr := testCredentialsRequestWithRecentLastSync(t)
+					cr := testCredentialsRequestWithRecentLastSync(t, nil)
 					cr.Status.Provisioned = false
 					return cr
 				}(),
@@ -1048,7 +1050,7 @@ func TestAWSCredentialsRequestReconcile(t *testing.T) {
 			existing: []runtime.Object{
 				testOperatorConfig(""),
 				func() *minterv1.CredentialsRequest {
-					cr := testCredentialsRequest(t)
+					cr := testCredentialsRequest(t, nil)
 					awsProvSpec, err := codec.EncodeProviderSpec(
 						&minterv1.AWSProviderSpec{
 							TypeMeta: metav1.TypeMeta{
@@ -1114,7 +1116,7 @@ func TestAWSCredentialsRequestReconcile(t *testing.T) {
 			existing: []runtime.Object{
 				testOperatorConfig(""),
 				func() *minterv1.CredentialsRequest {
-					cr := testCredentialsRequest(t)
+					cr := testCredentialsRequest(t, &sixHoursAgo)
 					awsProvSpec, err := codec.EncodeProviderSpec(
 						&minterv1.AWSProviderSpec{
 							TypeMeta: metav1.TypeMeta{
@@ -1191,7 +1193,7 @@ func TestAWSCredentialsRequestReconcile(t *testing.T) {
 		{
 			name: "error reconcile without operator config",
 			existing: []runtime.Object{
-				testCredentialsRequest(t),
+				testCredentialsRequest(t, nil),
 			},
 			mockRootAWSClient: func(mockCtrl *gomock.Controller) *mockaws.MockClient {
 				mockAWSClient := mockaws.NewMockClient(mockCtrl)
@@ -1460,8 +1462,8 @@ func testPassthroughCredentialsRequestWithDeletionTimestamp(t *testing.T) *minte
 	return cr
 }
 
-func testCredentialsRequestWithRecentLastSync(t *testing.T) *minterv1.CredentialsRequest {
-	cr := testCredentialsRequest(t)
+func testCredentialsRequestWithRecentLastSync(t *testing.T, mintTime *metav1.Time) *minterv1.CredentialsRequest {
+	cr := testCredentialsRequest(t, mintTime)
 	cr.Status.LastSyncGeneration = cr.Generation
 	cr.Status.LastSyncTimestamp = &metav1.Time{
 		// fake 20 minute old last sync
@@ -1471,8 +1473,8 @@ func testCredentialsRequestWithRecentLastSync(t *testing.T) *minterv1.Credential
 	return cr
 }
 
-func testCredentialsRequestWithDeletionTimestamp(t *testing.T) *minterv1.CredentialsRequest {
-	cr := testCredentialsRequest(t)
+func testCredentialsRequestWithDeletionTimestamp(t *testing.T, mintTime *metav1.Time) *minterv1.CredentialsRequest {
+	cr := testCredentialsRequest(t, mintTime)
 	now := metav1.Now()
 	cr.DeletionTimestamp = &now
 	cr.Status.Provisioned = true
@@ -1526,7 +1528,7 @@ func testPassthroughCredentialsRequest(t *testing.T) *minterv1.CredentialsReques
 	}
 }
 
-func testCredentialsRequest(t *testing.T) *minterv1.CredentialsRequest {
+func testCredentialsRequest(t *testing.T, mintTime *metav1.Time) *minterv1.CredentialsRequest {
 	cr := testPassthroughCredentialsRequest(t)
 
 	codec, err := minterv1.NewCodec()
@@ -1547,6 +1549,7 @@ func testCredentialsRequest(t *testing.T) *minterv1.CredentialsRequest {
 	}
 
 	cr.Status.ProviderStatus = awsStatus
+	cr.Status.MintedTimestamp = mintTime
 	return cr
 }
 
