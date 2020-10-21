@@ -537,12 +537,12 @@ func (r *ReconcileCredentialsRequest) Reconcile(request reconcile.Request) (reco
 	}
 	cloudCredsSecretUpdated := credentialsRootSecret != nil && credentialsRootSecret.ResourceVersion != cr.Status.LastSyncCloudCredsSecretResourceVersion
 
-	// TODO: this needs to happen only if we're in mint mode, but we don't know that unless we
-	// examine a per cloud secret annotation. I'd like this whole mechanism replaced with a new
-	// controller that sets the actual mode onto CloudCredential.Status.
-	changed, err := r.reconcileMintTimestamp(logger, cr, crSecret)
-	if changed || err != nil {
-		return reconcile.Result{}, err
+	// Only reconcile the mint timestamp if we're in mint mode
+	if credentialsRootSecret != nil && credentialsRootSecret.Annotations[constants.AnnotationKey] == constants.MintAnnotation {
+		changed, err := r.reconcileMintTimestamp(logger, cr, crSecret)
+		if changed || err != nil {
+			return reconcile.Result{}, err
+		}
 	}
 
 	isStale := cr.Generation != cr.Status.LastSyncGeneration
