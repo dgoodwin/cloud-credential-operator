@@ -1022,7 +1022,7 @@ func TestAWSCredentialsRequestReconcile(t *testing.T) {
 			existing: []runtime.Object{
 				testOperatorConfig(""),
 				func() *minterv1.CredentialsRequest {
-					cr := testCredentialsRequestWithRecentLastSync(t, nil)
+					cr := testCredentialsRequestWithRecentLastSync(t, &sixHoursAgo)
 					cr.Status.Provisioned = false
 					return cr
 				}(),
